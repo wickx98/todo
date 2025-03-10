@@ -250,21 +250,21 @@ export const ProfileSidebar = () => {
           </StyledMenuItem>
         </MenuLink>
 
-        <MenuLink to="/add">
+        <MenuLink to="/habit">
           <StyledMenuItem onClick={handleClose}>
-            <AddRounded /> &nbsp; Add Task
+            <TaskAltRounded /> &nbsp; Habits
           </StyledMenuItem>
         </MenuLink>
 
-        <MenuLink to="/habit">
+        <MenuLink to="/add">
           <StyledMenuItem onClick={handleClose}>
-            <TaskAltRounded /> &nbsp; Tasks
+            <AddRounded /> &nbsp; Add Tasks
           </StyledMenuItem>
         </MenuLink>
 
         <MenuLink to="/add-habit">
           <StyledMenuItem onClick={handleClose}>
-            <AddRounded /> &nbsp; Add Task
+            <AddRounded /> &nbsp; Add Habits
           </StyledMenuItem>
         </MenuLink>
 

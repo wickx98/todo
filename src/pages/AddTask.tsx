@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddTaskButton, Container, StyledInput } from "../styles";
 import { AddTaskRounded, MicRounded, AttachFileRounded, StopRounded, UploadRounded, DeleteRounded } from "@mui/icons-material";
-import { IconButton, InputAdornment, Tooltip, Select, MenuItem, FormControl, InputLabel, Checkbox, FormControlLabel, Typography, Box } from "@mui/material";
+import { IconButton, InputAdornment, Tooltip, Select, MenuItem, FormControl, InputLabel, Checkbox, FormControlLabel, Typography, Box, CircularProgress } from "@mui/material";
 import { CategorySelect, ColorPicker, TopBar, CustomEmojiPicker } from "../components";
 import { UserContext } from "../contexts/UserContext";
 import { useTheme } from "@emotion/react";
@@ -35,6 +35,7 @@ const AddTask = () => {
     "categories",
     "sessionStorage",
   );
+  const [loading, setLoading] = useState(false); // Loading state
 
   const navigate = useNavigate();
   const auth = getAuth();
@@ -56,14 +57,18 @@ const AddTask = () => {
       return;
     }
 
+    setLoading(true); // Start loading
+
     const userId = auth.currentUser.uid;
     const taskId = generateUUID();
     const taskRef = collection(db, "users", userId, "tasks");
 
     try {
       // Step 1: Upload the document and voice file to Firebase Storage
-        
-      const documentUrl = documentFile ? await handleFileUpload(documentFile, `tasks/${taskId}/documents/${documentFile.name}`) : null;
+      console.log("🚀 Uploading... Current documentFile:", documentFile);
+
+      const documentUrl = await handleFileUpload(documentFile, `tasks/${generateUUID()}/documents/${documentFile.name}`);
+      console.log("✅ Upload successful! URL:", documentUrl);
       const voiceFileUrl = voiceBlob ? await handleFileUpload(voiceBlob, `tasks/${taskId}/voice_notes/${voiceBlob}.mp3`) : null;
 
       // Step 2: Save task details to Firestore including the URLs of uploaded files
@@ -78,7 +83,7 @@ const AddTask = () => {
         pinned,
         documentUrl,
         voiceFileUrl,
-        categories: selectedCategories, 
+        categories: selectedCategories,
         createdAt: new Date(),
       });
 
@@ -87,6 +92,8 @@ const AddTask = () => {
     } catch (error) {
       console.error("Error adding task:", error);
       showToast("Failed to add task.", { type: "error" });
+    } finally {
+      setLoading(false); // End loading
     }
   };
 
@@ -96,18 +103,15 @@ const AddTask = () => {
       const recorder = new MediaRecorder(stream);
       const chunks: BlobPart[] | undefined = [];
 
-
       recorder.ondataavailable = (event) => {
         chunks.push(event.data);
       };
-
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: "audio/mp3" });
         setVoiceBlob(blob);
         setVoiceUrl(URL.createObjectURL(blob));
       };
-
 
       recorder.start();
       setMediaRecorder(recorder);
@@ -118,7 +122,6 @@ const AddTask = () => {
     }
   };
 
-
   const stopRecording = () => {
     if (mediaRecorder) {
       mediaRecorder.stop();
@@ -127,31 +130,47 @@ const AddTask = () => {
     }
   };
 
-
   const removeVoiceNote = () => {
     setVoiceBlob(null);
     setVoiceUrl(null);
     showToast("Voice note removed!", { type: "success" });
   };
 
+  const handleFileUpload = async (file: File | Blob, path: string) => {
+    if (!file) {
+      console.error("❌ File is null or undefined.");
+      return null;
+    }
 
-  const handleFileUpload = async (file: ArrayBuffer | Blob | Uint8Array<ArrayBufferLike>, path: string | undefined) => {
-    if (!file) return null;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    try {
+      console.log("📂 Uploading file...");
+      console.log("🛤️ Path:", path);
+      console.log("📏 File size:", file.size, "bytes");
+      console.log("📄 File type:", file.type);
+
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file);
+
+      console.log("✅ Upload successful! Fetching download URL...");
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log("🔗 File available at:", downloadURL);
+
+      return downloadURL;
+    } catch (error) {
+      console.error("🚨 File upload error:", error);
+      return null;
+    }
   };
+
   return (
     <>
       <TopBar title="Add New Task" />
       <CustomEmojiPicker emoji={undefined} setEmoji={() => {}} name={name} type="task" />
-      <Container sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>  
-        <Box sx={{ maxWidth: "sm", display: "flex", flexDirection: "column", alignItems:"center",justifyContent: "center",padding: theme.spacing(3) }}>
+      <Container sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>
+        <Box sx={{ maxWidth: "sm", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>
           <StyledInput label="Task Name" value={name} onChange={(e) => setName(e.target.value)} required fullWidth sx={{ mb: 2, width: "100%" }} />
           <StyledInput label="Task Description" value={description} onChange={(e) => setDescription(e.target.value)} multiline rows={4} fullWidth sx={{ mb: 2 }} />
           <StyledInput type="datetime-local" label="Deadline" value={deadline} onChange={(e) => setDeadline(e.target.value)} fullWidth sx={{ mb: 2 }} />
-
-          
 
           {/* File Upload with Icon */}
           <StyledInput
@@ -163,7 +182,20 @@ const AddTask = () => {
                   <Tooltip title="Attach File">
                     <IconButton component="label">
                       <AttachFileRounded />
-                      <input type="file" hidden accept=".pdf,.doc,.docx" onChange={(e) => setDocumentFile(e.target.files?.[0] || null)} />
+                      <input
+                        type="file"
+                        hidden
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          if (file) {
+                            console.log("📂 File selected:", file);
+                            setDocumentFile(file);
+                          } else {
+                            console.log("❌ No file selected.");
+                          }
+                        }}
+                      />
                     </IconButton>
                   </Tooltip>
                 </InputAdornment>
@@ -175,14 +207,13 @@ const AddTask = () => {
 
           <Box>
             {!isRecording ? (
-              <Tooltip title="Start Recording" sx={{ flex : 1 , flexDirection: "row", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>
-                <Box sx={{ flex : 1 , flexDirection: "row", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}> 
-                <h3>Add voice recode</h3>
-                <IconButton color="primary" onClick={startRecording}>
-                  <MicRounded />
-                </IconButton>
+              <Tooltip title="Start Recording" sx={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>
+                <Box sx={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", padding: theme.spacing(3) }}>
+                  <h3>Add voice recode</h3>
+                  <IconButton color="primary" onClick={startRecording}>
+                    <MicRounded />
+                  </IconButton>
                 </Box>
-                
               </Tooltip>
             ) : (
               <Tooltip title="Stop Recording">
@@ -191,7 +222,6 @@ const AddTask = () => {
                 </IconButton>
               </Tooltip>
             )}
-
 
             {voiceUrl && (
               <div>
@@ -204,34 +234,26 @@ const AddTask = () => {
               </div>
             )}
           </Box>
-          <FormControlLabel 
-            control={<Checkbox checked={emailReminder} onChange={(e) => setEmailReminder(e.target.checked)} />} 
-            label="Email Reminder" 
-            sx={{ mb: 2 }} 
-          />
+
+          <FormControlLabel control={<Checkbox checked={emailReminder} onChange={(e) => setEmailReminder(e.target.checked)} />} label="Email Reminder" sx={{ mb: 2 }} />
 
           {emailReminder && (
             <>
-              
-
-              
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Recurrence Frequency</InputLabel>
-                  <Select value={recurrenceFrequency} onChange={(e) => setRecurrenceFrequency(e.target.value)}>
-                    <MenuItem value="daily">Daily</MenuItem>
-                    <MenuItem value="weekly">Weekly</MenuItem>
-                    <MenuItem value="monthly">Monthly</MenuItem>
-                    <MenuItem value="hourly">Hourly</MenuItem>
-                    <MenuItem value="yearly">Yearly</MenuItem>
-                  </Select>
-                </FormControl>
-              
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Recurrence Frequency</InputLabel>
+                <Select value={recurrenceFrequency} onChange={(e) => setRecurrenceFrequency(e.target.value)}>
+                  <MenuItem value="daily">Daily</MenuItem>
+                  <MenuItem value="weekly">Weekly</MenuItem>
+                  <MenuItem value="monthly">Monthly</MenuItem>
+                  <MenuItem value="hourly">Hourly</MenuItem>
+                  <MenuItem value="yearly">Yearly</MenuItem>
+                </Select>
+              </FormControl>
             </>
           )}
-          {/* <FormControlLabel control={<Checkbox checked={pinned} onChange={(e) => setPinned(e.target.checked)} />} label="Pin Task" sx={{ mb: 2 }} /> */}
-        </Box>
-        <Box sx={{ maxWidth: "sm", display: "flex", flexDirection: "column", alignItems:"center",justifyContent: "center",pr: 13 , pl: 13  }}> 
-          <FormControl fullWidth sx={{ mb: 2, width: "100%" ,pr: 13 , pl: 13}}>
+
+          {/* Priority and Status */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
             <h4>Priority</h4>
             <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
               <MenuItem value="Urgent & Important">Urgent & Important</MenuItem>
@@ -241,7 +263,7 @@ const AddTask = () => {
             </Select>
           </FormControl>
 
-          <FormControl fullWidth sx={{ mb: 2, width: "100%" , pr: 13 , pl: 13}}>
+          <FormControl fullWidth sx={{ mb: 2 }}>
             <h4>Status</h4>
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
               <MenuItem value="Pending">Pending</MenuItem>
@@ -250,15 +272,18 @@ const AddTask = () => {
             </Select>
           </FormControl>
 
-          <CategorySelect
-            selectedCategories={selectedCategories}
-            onCategoryChange={(categories) => setSelectedCategories(categories)}
-            fontColor={getFontColor(theme.secondary)}
-            
-          />
-          </Box>  
-        <AddTaskButton onClick={handleAddTask}>Create Task</AddTaskButton>
-     </Container> 
+          <CategorySelect selectedCategories={selectedCategories} onCategoryChange={(categories) => setSelectedCategories(categories)} fontColor={getFontColor(theme.secondary)} />
+        </Box>
+
+        {/* Loading animation */}
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", paddingTop: theme.spacing(3) }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <AddTaskButton onClick={handleAddTask}>Create Task</AddTaskButton>
+        )}
+      </Container>
     </>
   );
 };

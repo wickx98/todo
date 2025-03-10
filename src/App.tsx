@@ -9,6 +9,7 @@ import { useSystemTheme } from "./hooks/useSystemTheme";
 import AppRouter from "./router";
 import { GlobalStyles } from "./styles";
 import { Themes, createCustomTheme, isDarkMode } from "./theme/createTheme";
+import { scheduleNotifications } from "./utils/scheduleNotifications";
 
 function App() {
   const { user } = useContext(UserContext);
@@ -30,7 +31,29 @@ function App() {
     if (themeColorMeta) {
       themeColorMeta.setAttribute("content", getMuiTheme().palette.secondary.main);
     }
+    
   }, [user.theme, getMuiTheme]);
+
+  useEffect(() => {
+    // Schedule notifications immediately when the component is mounted
+    
+
+    // Set interval to trigger every minute (60000ms)
+    const interval = setInterval(() => {
+      
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          console.log(`1 min scheduler`);
+          scheduleNotifications();
+        }
+      }
+      );
+      
+      
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []); 
 
   return (
     <MuiThemeProvider

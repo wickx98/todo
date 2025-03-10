@@ -6,19 +6,20 @@ import { AddButton, GreetingHeader, GreetingText } from "../styles";
 import { UserContext } from '../contexts/UserContext';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useResponsiveDisplay } from '../hooks/useResponsiveDisplay';
-import TaskList from '../components/task/TaskList';
+import HabitList from '../components/habit/HabitList';
 import { Emoji } from 'emoji-picker-react';
 import { AddRounded, WifiOff } from '@mui/icons-material';
 import { Tooltip, Dialog, DialogActions, DialogContent, DialogTitle, Button } from '@mui/material';
 
-const TaskDetails = () => {
+const HabitDetails = () => {
   const { user } = useContext(UserContext);
   const { emojisStyle, settings, name } = user;
-  const [tasks, setTasks] = useState([]); 
+  const [habits, setHabits] = useState([]); 
+  const [categories, setCategories] = useState({});
   const [randomGreeting, setRandomGreeting] = useState<string | React.ReactNode>("");
   const [greetingKey, setGreetingKey] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
+  const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
   const n = useNavigate();
   const isMobile = useResponsiveDisplay();
@@ -28,88 +29,68 @@ const TaskDetails = () => {
     const currentUser = auth.currentUser;
     if (currentUser) {
       const db = getFirestore();
-      const tasksRef = collection(db, `users/${currentUser.uid}/tasks`);
+      const habitsRef = collection(db, `users/${currentUser.uid}/habits`);
 
-      const fetchTasks = async () => {
+      const fetchHabits = async () => {
         try {
-          const querySnapshot = await getDocs(tasksRef);
+          const querySnapshot = await getDocs(habitsRef);
+          const categorizedHabits = {};
 
-          // Exclude tasks with status "Deleted"
-          const filteredTasks = querySnapshot.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter((task) => task.status !== "Deleted");
+          querySnapshot.docs.forEach((doc) => {
+            const habit = { id: doc.id, ...doc.data() };
+            if (habit.status !== "Deleted") {
+              const category = habit.category || "Uncategorized";
+              if (!categorizedHabits[category]) {
+                categorizedHabits[category] = [];
+              }
+              categorizedHabits[category].push(habit);
+            }
+          });
 
-          setTasks(filteredTasks);
+          setCategories(categorizedHabits);
         } catch (error) {
-          console.error("Error fetching tasks:", error);
+          console.error("Error fetching habits:", error);
         }
       };
 
-      fetchTasks();
+      fetchHabits();
     }
   }, []);
 
-  // Function to mark a task as "Deleted"
-  const handleDeleteTask = async (id: string) => {
+  const handleDeleteHabit = async (id: string) => {
     try {
       const db = getFirestore();
-      const taskDocRef = doc(db, `users/${getAuth().currentUser?.uid}/tasks`, id);
-
-      // Update the task's status to "Deleted"
-      await updateDoc(taskDocRef, { status: "Deleted" });
-
-      // Update state to remove deleted tasks from display
-      setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
-
-      setOpenDeleteDialog(false); // Close the dialog after updating status
+      const habitDocRef = doc(db, `users/${getAuth().currentUser?.uid}/habits`, id);
+      await updateDoc(habitDocRef, { status: "Deleted" });
+      setCategories((prevCategories) => {
+        const updatedCategories = { ...prevCategories };
+        for (const category in updatedCategories) {
+          updatedCategories[category] = updatedCategories[category].filter((habit) => habit.id !== id);
+        }
+        return updatedCategories;
+      });
+      setOpenDeleteDialog(false);
     } catch (error) {
-      console.error("Error updating task status:", error);
+      console.error("Error updating habit status:", error);
     }
   };
 
-  // Open delete confirmation dialog
   const handleDeleteConfirmation = (id: string) => {
-    setTaskToDelete(id);
+    setHabitToDelete(id);
     setOpenDeleteDialog(true);
   };
 
-  // Close dialog
   const handleCloseDialog = () => {
     setOpenDeleteDialog(false);
-    setTaskToDelete(null);
-  };
-
-  // Greeting function
-  const displayGreeting = (): string => {
-    const currentHour = new Date().getHours();
-    if (currentHour < 12 && currentHour >= 5) return "Good morning";
-    if (currentHour < 18 && currentHour > 12) return "Good afternoon";
-    return "Good evening";
-  };
-
-  // Render greeting with emojis
-  const renderGreetingWithEmojis = (text: string | React.ReactNode) => {
-    if (typeof text === "string") {
-      const emojiRegex = /\*\*(.*?)\*\*/g;
-      return text.split(emojiRegex).map((part, index) =>
-        index % 2 === 1 ? <Emoji key={index} size={20} unified={part.trim()} emojiStyle={emojisStyle} /> : part
-      );
-    } else {
-      return text;
-    }
+    setHabitToDelete(null);
   };
 
   return (
     <>
       <GreetingHeader>
-        <Emoji unified="1f44b" emojiStyle={emojisStyle} /> &nbsp; {displayGreeting()}
-        {name && (
-          <span translate="no">
-            , <span>{name}</span>
-          </span>
-        )}
+        <Emoji unified="1f44b" emojiStyle={emojisStyle} /> &nbsp; Hello, {name}
       </GreetingHeader>
-      <GreetingText key={greetingKey}>{renderGreetingWithEmojis(randomGreeting)}</GreetingText>
+      <GreetingText key={greetingKey}>{randomGreeting}</GreetingText>
 
       {!isOnline && (
         <div>
@@ -117,37 +98,33 @@ const TaskDetails = () => {
         </div>
       )}
 
-      <TaskList
-        tasks={tasks}
-        onEdit={(id) => n(`/edit/${id}`)}
-        onDelete={handleDeleteConfirmation} // Pass confirmation handler
-        title="Your Tasks"
-      />
+      {Object.keys(categories).map((category) => (
+        <HabitList
+          key={category}
+          habits={categories[category]}
+          category={category}
+          onEdit={(id) => n(`/edit/${id}`)}
+          onDelete={handleDeleteConfirmation}
+          title={category}
+        />
+      ))}
       
       {!isMobile && (
-        <Tooltip title={tasks.length > 0 ? "Add New Task" : "Add Task"} placement="left">
-          <AddButton
-            animate={tasks.length === 0}
-            glow={settings.enableGlow}
-            onClick={() => n("add")}
-            aria-label="Add Task"
-          >
+        <Tooltip title="Add New Habit" placement="left">
+          <AddButton onClick={() => n("add-habit")} aria-label="Add Habit">
             <AddRounded style={{ fontSize: "44px" }} />
           </AddButton>
         </Tooltip>
       )}
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={openDeleteDialog} onClose={handleCloseDialog}>
         <DialogTitle>Confirm Deletion</DialogTitle>
-        <DialogContent>
-          Are you sure you want to delete this task?
-        </DialogContent>
+        <DialogContent>Are you sure you want to delete this habit?</DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog} color="primary">Cancel</Button>
           <Button
             onClick={() => {
-              if (taskToDelete) handleDeleteTask(taskToDelete);
+              if (habitToDelete) handleDeleteHabit(habitToDelete);
             }}
             color="secondary"
           >
@@ -159,4 +136,4 @@ const TaskDetails = () => {
   );
 };
 
-export default TaskDetails;
+export default HabitDetails;

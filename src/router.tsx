@@ -70,6 +70,31 @@ const AppRouter = (): ReactElement => {
           }
         />
         <Route
+          path="/habit"
+          element={
+            <ProtectedRoute>
+              <HabitDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/add-habit"
+          element={
+            <ProtectedRoute>
+              <AddHabit />
+            </ProtectedRoute>
+          }
+        />      
+
+        <Route
+          path="habit/add-habit"
+          element={
+            <ProtectedRoute>
+              <AddHabit />
+            </ProtectedRoute>
+          }
+        />      
+        <Route
           path="task/add"
           element={
             <ProtectedRoute>
