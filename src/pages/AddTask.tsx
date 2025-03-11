@@ -67,7 +67,7 @@ const AddTask = () => {
       // Step 1: Upload the document and voice file to Firebase Storage
       console.log("🚀 Uploading... Current documentFile:", documentFile);
 
-      const documentUrl = await handleFileUpload(documentFile, `tasks/${generateUUID()}/documents/${documentFile.name}`);
+      const documentUrl =documentFile?  await handleFileUpload(documentFile, `tasks/${generateUUID()}/documents/${documentFile.name}`) : null;
       console.log("✅ Upload successful! URL:", documentUrl);
       const voiceFileUrl = voiceBlob ? await handleFileUpload(voiceBlob, `tasks/${taskId}/voice_notes/${voiceBlob}.mp3`) : null;
 
